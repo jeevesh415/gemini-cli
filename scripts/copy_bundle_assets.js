@@ -54,6 +54,18 @@ for (const file of policyFiles) {
 
 console.log(`Copied ${policyFiles.length} policy files to bundle/policies/`);
 
+// Also copy policies to a2a-server dist directory for bundled execution
+const a2aPolicyDir = join(root, 'packages/a2a-server/dist/policies');
+if (!existsSync(a2aPolicyDir)) {
+  mkdirSync(a2aPolicyDir, { recursive: true });
+}
+for (const file of policyFiles) {
+  copyFileSync(join(root, file), join(a2aPolicyDir, basename(file)));
+}
+console.log(
+  `Copied ${policyFiles.length} policy files to packages/a2a-server/dist/policies/`,
+);
+
 // 3. Copy Documentation (docs/)
 const docsSrc = join(root, 'docs');
 const docsDest = join(bundleDir, 'docs');
@@ -108,16 +120,21 @@ if (!existsSync(bundleMcpSrc)) {
 cpSync(bundleMcpSrc, bundleMcpDest, { recursive: true, dereference: true });
 console.log('Copied bundled chrome-devtools-mcp to bundle/bundled/');
 
-// 7. Copy pre-built ripgrep vendor binaries
-const ripgrepVendorSrc = join(root, 'packages/core/vendor/ripgrep');
-const ripgrepVendorDest = join(bundleDir, 'vendor', 'ripgrep');
-if (existsSync(ripgrepVendorSrc)) {
-  mkdirSync(ripgrepVendorDest, { recursive: true });
-  cpSync(ripgrepVendorSrc, ripgrepVendorDest, {
+// 7. Copy Extension Examples
+const extensionExamplesSrc = join(
+  root,
+  'packages/cli/src/commands/extensions/examples',
+);
+const extensionExamplesDest = join(bundleDir, 'examples');
+const EXCLUDED_EXAMPLE_DIRS = ['node_modules', 'dist'];
+
+if (existsSync(extensionExamplesSrc)) {
+  cpSync(extensionExamplesSrc, extensionExamplesDest, {
     recursive: true,
     dereference: true,
+    filter: (src) => !EXCLUDED_EXAMPLE_DIRS.some((dir) => src.includes(dir)),
   });
-  console.log('Copied ripgrep vendor binaries to bundle/vendor/ripgrep/');
+  console.log('Copied extension examples to bundle/examples/');
 }
 
 console.log('Assets copied to bundle/');

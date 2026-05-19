@@ -107,6 +107,7 @@ describe('EditTool', () => {
       getGeminiClient: vi.fn().mockReturnValue(geminiClient),
       getBaseLlmClient: vi.fn().mockReturnValue(baseLlmClient),
       getTargetDir: () => rootDir,
+      getProjectRoot: () => rootDir,
       getApprovalMode: vi.fn(),
       setApprovalMode: vi.fn(),
       getWorkspaceContext: () => createMockWorkspaceContext(rootDir),
@@ -510,6 +511,42 @@ function doIt() {
       expect(result.newContent).toBe(expectedContent);
     });
 
+    it('should preserve trailing newlines in flexible replacement (regression)', async () => {
+      const content = '  line1\n  line2\n  line3\n';
+      const result = await calculateReplacement(mockConfig, {
+        params: {
+          file_path: 'test.txt',
+          old_string: 'line1\nline2',
+          new_string: 'line1-replaced\nline2-replaced',
+        },
+        currentContent: content,
+        abortSignal,
+      });
+
+      expect(result.newContent).toBe(
+        '  line1-replaced\n  line2-replaced\n  line3\n',
+      );
+    });
+
+    it('should correctly increment loop index in flexible replacement when allow_multiple is true (regression)', async () => {
+      const content = '  match1\n  match2\n  match1\n  match2\n';
+      const result = await calculateReplacement(mockConfig, {
+        params: {
+          file_path: 'test.txt',
+          old_string: 'match1\nmatch2',
+          new_string: 'replaced1\nreplaced2\nreplaced3',
+          allow_multiple: true,
+        },
+        currentContent: content,
+        abortSignal,
+      });
+
+      expect(result.occurrences).toBe(2);
+      expect(result.newContent).toBe(
+        '  replaced1\n  replaced2\n  replaced3\n  replaced1\n  replaced2\n  replaced3\n',
+      );
+    });
+
     it('should correctly rebase indentation in flexible replacement without double-indenting', async () => {
       const content = '    if (a) {\n        foo();\n    }\n';
       // old_string and new_string are unindented. They should be rebased to 4-space.
@@ -719,6 +756,17 @@ function doIt() {
       });
 
       expect(result.llmContent).toMatch(/Successfully modified file/);
+      expect(result.display).toEqual(
+        expect.objectContaining({
+          name: 'Edit',
+          resultSummary: expect.stringContaining('added'),
+          result: expect.objectContaining({
+            type: 'diff',
+            beforeText: initialContent,
+            afterText: newContent,
+          }),
+        }),
+      );
       expect(fs.readFileSync(filePath, 'utf8')).toBe(newContent);
       const display = result.returnDisplay as FileDiff;
       expect(display.fileDiff).toMatch(initialContent);
@@ -1336,8 +1384,8 @@ function doIt() {
       vi.mocked(mockConfig.isPlanMode).mockReturnValue(true);
       vi.mocked(mockConfig.storage.getPlansDir).mockReturnValue(plansDir);
 
-      const filePath = path.join(rootDir, 'test-file.txt');
-      const planFilePath = path.join(plansDir, 'test-file.txt');
+      const filePath = 'test-file.txt';
+      const planFilePath = path.join(plansDir, filePath);
       const initialContent = 'some initial content';
       fs.writeFileSync(planFilePath, initialContent, 'utf8');
 
